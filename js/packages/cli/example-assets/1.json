@@ -1,1 +1,40 @@
-{"name":"2","symbol":"","image":"1.png","properties":{"files":[{"uri":"1.png","type":"image/png"}],"category":"image","creators":[]},"description":"","seller_fee_basis_points":500,"attributes":[{"trait_type":"background","value":"light-blue"},{"trait_type":"eyes","value":"star-eyes"},{"trait_type":"mouth","value":"triangle-mouth"},{"trait_type":"face","value":"teal-face"}],"collection":{}}
+{
+    "name": "TEST 2",
+    "symbol": "",
+    "description": "Variant TEST",
+    "seller_fee_basis_points": 0,
+    "image": "1.png",
+    "attributes": [
+        {
+            "trait_type": "Background",
+            "value": "Space"
+        },
+        {
+            "trait_type": "Bodies",
+            "value": "TESTdarkteal"
+        },
+        {
+            "trait_type": "Accessory",
+            "value": "Beanie"
+        }
+    ],
+    "collection": {
+        "name": "TEST NFT #2",
+        "family": "TESTs"
+    },
+    "properties": {
+        "files": [
+            {
+                "uri": "1.png",
+                "type": "image/png"
+            }
+        ],
+        "category": "image",
+        "creators": [
+            {
+                "address": "Ajb36Y2r3PwimJoUnQytHbQwtEMpigJBNAQof2FVWdyZ",
+                "share": 100
+            }
+        ]
+    }
+}
