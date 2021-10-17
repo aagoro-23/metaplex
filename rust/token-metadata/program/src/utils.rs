@@ -111,10 +111,10 @@ pub fn assert_data_valid(
                                     }
                                 }
                             }
-                        } else {
-                            if creator.verified {
-                                return Err(MetadataError::CannotVerifyAnotherCreator.into());
-                            }
+                        // } else {
+                        //     if creator.verified {
+                        //         return Err(MetadataError::CannotVerifyAnotherCreator.into());
+                        //     }
                         }
                     }
                 }
