@@ -1,21 +1,33 @@
-import React from 'react';
-import { Row, Col, Divider, Layout, Tag, Button, Skeleton, List, Card } from 'antd';
+import React, { useState } from 'react';
+import {
+  Row,
+  Col,
+  Divider,
+  Layout,
+  Tag,
+  Button,
+  Skeleton,
+  List,
+  Card,
+} from 'antd';
 import { useParams } from 'react-router-dom';
-import { useArt, useExtendedArt } from './../../hooks';
+import { useArt, useExtendedArt } from '../../hooks';
 
 import { ArtContent } from '../../components/ArtContent';
 import { shortenAddress, useConnection } from '@oyster/common';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { MetaAvatar } from '../../components/MetaAvatar';
 import { sendSignMetadata } from '../../actions/sendSignMetadata';
-import { ViewOn } from './../../components/ViewOn';
+import { ViewOn } from '../../components/ViewOn';
 import { ArtType } from '../../types';
+import { ArtMinting } from '../../components/ArtMinting';
 
 const { Content } = Layout;
 
 export const ArtView = () => {
   const { id } = useParams<{ id: string }>();
   const wallet = useWallet();
+  const [remountArtMinting, setRemountArtMinting] = useState(0);
 
   const connection = useConnection();
   const art = useArt(id);
@@ -39,7 +51,7 @@ export const ArtView = () => {
   const description = data?.description;
   const attributes = data?.attributes;
 
-  const pubkey = wallet.publicKey?.toBase58() || '';
+  const pubkey = wallet?.publicKey?.toBase58() || '';
 
   const tag = (
     <div className="info-header">
@@ -67,13 +79,14 @@ export const ArtView = () => {
         <Row ref={ref}>
           <Col xs={{ span: 24 }} md={{ span: 12 }} style={{ padding: '30px' }}>
             <ArtContent
-              style={{ width: 300 }}
+              style={{ width: '300px', height: '300px', margin: '0 auto' }}
               height={300}
               width={300}
               className="artwork-image"
               pubkey={id}
               active={true}
               allowMeshRender={true}
+              artView={true}
             />
           </Col>
           {/* <Divider /> */}
@@ -181,6 +194,13 @@ export const ArtView = () => {
                 >
                   Mark as Sold
                 </Button> */}
+
+            {/* TODO: Add conversion of MasterEditionV1 to MasterEditionV2 */}
+            <ArtMinting
+              id={id}
+              key={remountArtMinting}
+              onMint={async () => await setRemountArtMinting(prev => prev + 1)}
+            />
           </Col>
           <Col span="12">
             <Divider />
@@ -191,29 +211,26 @@ export const ArtView = () => {
             <br />
             {/*
               TODO: add info about artist
-
-
             <div className="info-header">ABOUT THE CREATOR</div>
             <div className="info-content">{art.about}</div> */}
           </Col>
           <Col span="12">
-            {attributes &&
+            {attributes && (
               <>
                 <Divider />
                 <br />
                 <div className="info-header">Attributes</div>
-                <List
-                  size="large"
-                  grid={{ column: 4 }}
-                >
-                  {attributes.map(attribute =>
-                    <List.Item>
-                      <Card title={attribute.trait_type}>{attribute.value}</Card>
+                <List size="large" grid={{ column: 4 }}>
+                  {attributes.map(attribute => (
+                    <List.Item key={attribute.trait_type}>
+                      <Card title={attribute.trait_type}>
+                        {attribute.value}
+                      </Card>
                     </List.Item>
-                  )}
+                  ))}
                 </List>
               </>
-            }
+            )}
           </Col>
         </Row>
       </Col>

@@ -5,7 +5,6 @@ import {
   SystemProgram,
 } from '@solana/web3.js';
 import {
-  actions,
   Metadata,
   ParsedAccount,
   MasterEditionV1,
@@ -41,7 +40,10 @@ import {
   TupleNumericType,
   SafetyDepositConfig,
   ParticipationStateV2,
-} from '../models/metaplex';
+  AuctionCache,
+  StoreIndexer,
+} from '@oyster/common/dist/lib/models/metaplex/index';
+import { createTokenAccount } from '@oyster/common/dist/lib/actions/account';
 import { createVault } from './createVault';
 import { closeVault } from './closeVault';
 import {
@@ -50,15 +52,14 @@ import {
 } from './addTokensToVault';
 import { makeAuction } from './makeAuction';
 import { createExternalPriceAccount } from './createExternalPriceAccount';
-import { deprecatedValidateParticipation } from '../models/metaplex/deprecatedValidateParticipation';
+import { deprecatedValidateParticipation } from '@oyster/common/dist/lib/models/metaplex/deprecatedValidateParticipation';
 import { deprecatedCreateReservationListForTokens } from './deprecatedCreateReservationListsForTokens';
 import { deprecatedPopulatePrintingTokens } from './deprecatedPopulatePrintingTokens';
 import { setVaultAndAuctionAuthorities } from './setVaultAndAuctionAuthorities';
 import { markItemsThatArentMineAsSold } from './markItemsThatArentMineAsSold';
-import { validateSafetyDepositBoxV2 } from '../models/metaplex/validateSafetyDepositBoxV2';
-import { initAuctionManagerV2 } from '../models/metaplex/initAuctionManagerV2';
-
-const { createTokenAccount } = actions;
+import { validateSafetyDepositBoxV2 } from '@oyster/common/dist/lib/models/metaplex/validateSafetyDepositBoxV2';
+import { initAuctionManagerV2 } from '@oyster/common/dist/lib/models/metaplex/initAuctionManagerV2';
+import { cacheAuctionIndexer } from './cacheAuctionInIndexer';
 
 interface normalPattern {
   instructions: TransactionInstruction[];
@@ -85,6 +86,7 @@ interface byType {
   deprecatedValidateParticipation?: normalPattern;
   deprecatedBuildAndPopulateOneTimeAuthorizationAccount?: normalPattern;
   deprecatedPopulatePrintingTokens: arrayPattern;
+  cacheAuctionIndexer: arrayPattern;
 }
 
 export interface SafetyDepositDraft {
@@ -111,6 +113,7 @@ export async function createAuctionManager(
   safetyDepositDrafts: SafetyDepositDraft[],
   participationSafetyDepositDraft: SafetyDepositDraft | undefined,
   paymentMint: StringPublicKey,
+  storeIndexer: ParsedAccount<StoreIndexer>[],
 ): Promise<{
   vault: StringPublicKey;
   auction: StringPublicKey;
@@ -142,7 +145,7 @@ export async function createAuctionManager(
     auction,
   } = await makeAuction(wallet, vault, auctionSettings);
 
-  let safetyDepositConfigsWithPotentiallyUnsetTokens =
+  const safetyDepositConfigsWithPotentiallyUnsetTokens =
     await buildSafetyDepositArray(
       wallet,
       safetyDepositDrafts,
@@ -189,7 +192,7 @@ export async function createAuctionManager(
     safetyDepositConfigs,
   );
 
-  let lookup: byType = {
+  const lookup: byType = {
     markItemsThatArentMineAsSold: await markItemsThatArentMineAsSold(
       wallet,
       safetyDepositDrafts,
@@ -275,9 +278,17 @@ export async function createAuctionManager(
       instructions: populateInstr,
       signers: populateSigners,
     },
+    cacheAuctionIndexer: await cacheAuctionIndexer(
+      wallet,
+      vault,
+      auction,
+      auctionManager,
+      safetyDepositConfigs.map(s => s.draft.metadata.info.mint),
+      storeIndexer,
+    ),
   };
 
-  let signers: Keypair[][] = [
+  const signers: Keypair[][] = [
     ...lookup.markItemsThatArentMineAsSold.signers,
     lookup.externalPriceAccount.signers,
     lookup.deprecatedBuildAndPopulateOneTimeAuthorizationAccount?.signers || [],
@@ -292,6 +303,7 @@ export async function createAuctionManager(
     lookup.deprecatedValidateParticipation?.signers || [],
     ...lookup.validateBoxes.signers,
     lookup.startAuction.signers,
+    ...lookup.cacheAuctionIndexer.signers,
   ];
   const toRemoveSigners: Record<number, boolean> = {};
   let instructions: TransactionInstruction[][] = [
@@ -310,6 +322,7 @@ export async function createAuctionManager(
     lookup.deprecatedValidateParticipation?.instructions || [],
     ...lookup.validateBoxes.instructions,
     lookup.startAuction.instructions,
+    ...lookup.cacheAuctionIndexer.instructions,
   ].filter((instr, i) => {
     if (instr.length > 0) {
       return true;
@@ -377,7 +390,7 @@ async function buildSafetyDepositArray(
 ): Promise<SafetyDepositInstructionTemplate[]> {
   if (!wallet.publicKey) throw new WalletNotConnectedError();
 
-  let safetyDepositTemplates: SafetyDepositInstructionTemplate[] = [];
+  const safetyDepositTemplates: SafetyDepositInstructionTemplate[] = [];
   safetyDeposits.forEach((s, i) => {
     const maxAmount = [...s.amountRanges.map(a => a.amount)]
       .sort()
@@ -518,13 +531,13 @@ async function setupAuctionManagerInstructions(
 }> {
   if (!wallet.publicKey) throw new WalletNotConnectedError();
 
-  let store = programIds().store?.toBase58();
+  const store = programIds().store?.toBase58();
   if (!store) {
     throw new Error('Store not initialized');
   }
 
-  let signers: Keypair[] = [];
-  let instructions: TransactionInstruction[] = [];
+  const signers: Keypair[] = [];
+  const instructions: TransactionInstruction[] = [];
 
   const { auctionManagerKey } = await getAuctionKeys(vault);
 
@@ -572,8 +585,8 @@ async function setupStartAuction(
 }> {
   if (!wallet.publicKey) throw new WalletNotConnectedError();
 
-  let signers: Keypair[] = [];
-  let instructions: TransactionInstruction[] = [];
+  const signers: Keypair[] = [];
+  const instructions: TransactionInstruction[] = [];
 
   await startAuction(vault, wallet.publicKey.toBase58(), instructions);
 
@@ -599,8 +612,8 @@ async function deprecatedValidateParticipationHelper(
     throw new Error('Store not initialized');
   }
 
-  let instructions: TransactionInstruction[] = [];
-  let signers: Keypair[] = [];
+  const instructions: TransactionInstruction[] = [];
+  const signers: Keypair[] = [];
   const whitelistedCreator = participationSafetyDepositDraft.metadata.info.data
     .creators
     ? await findValidWhitelistedCreator(
@@ -684,12 +697,12 @@ async function validateBoxes(
   if (!store) {
     throw new Error('Store not initialized');
   }
-  let signers: Keypair[][] = [];
-  let instructions: TransactionInstruction[][] = [];
+  const signers: Keypair[][] = [];
+  const instructions: TransactionInstruction[][] = [];
 
   for (let i = 0; i < safetyDeposits.length; i++) {
-    let tokenSigners: Keypair[] = [];
-    let tokenInstructions: TransactionInstruction[] = [];
+    const tokenSigners: Keypair[] = [];
+    const tokenInstructions: TransactionInstruction[] = [];
 
     let safetyDepositBox: StringPublicKey;
 
@@ -762,8 +775,8 @@ async function deprecatedBuildAndPopulateOneTimeAuthorizationAccount(
 
   if (!oneTimePrintingAuthorizationMint)
     return { instructions: [], signers: [] };
-  let signers: Keypair[] = [];
-  let instructions: TransactionInstruction[] = [];
+  const signers: Keypair[] = [];
+  const instructions: TransactionInstruction[] = [];
   const recipientKey: StringPublicKey = (
     await findProgramAddress(
       [
