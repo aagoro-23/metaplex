@@ -121,7 +121,7 @@ pub mod nft_candy_machine {
         for c in &config.data.creators {
             creators.push(metaplex_token_metadata::state::Creator {
                 address: c.address,
-                verified: false,
+                verified: true,
                 share: c.share,
             });
         }
